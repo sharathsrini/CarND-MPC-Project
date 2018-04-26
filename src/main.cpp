@@ -95,6 +95,7 @@ int main() {
           double delta = j[1]["steering_angle"];
           // Because of delay we propagate state in time so that MPC initial condition is not the current one,
           // but the one after 100 milliseconds
+          // http://cse.lab.imtlucca.it/~bemporad/publications/papers/tds09-afr.pdf
           double latency = 0.1;
           double Lf = 2.67;
 
