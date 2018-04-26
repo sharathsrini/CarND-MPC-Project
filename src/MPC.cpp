@@ -5,13 +5,25 @@
 
 using CppAD::AD;
 
-// TODO: Set the timestep length and duration
-size_t N = 10;
+// TODO: done
+// Set the timestep length and duration
+size_t N = 5;
 double dt = 0.5;
+
+// This value assumes the model presented in the classroom is used.
+//
+// It was obtained by measuring the radius formed by running the vehicle in the
+// simulator around in a circle with a constant steering angle and velocity on a
+// flat terrain.
+//
+// Lf was tuned until the the radius formed by the simulating the model
+// presented in the classroom matched the previous radius.
+//
+// This is the length from front to CoG that has a similar radius.
+const double Lf = 2.67;
 
 // Define indices for variable vars
 // State
-//
 size_t x_start = 0;
 size_t y_start = x_start + N;
 size_t psi_start = y_start + N;
@@ -27,26 +39,14 @@ const size_t act_dim = 2;
 
 const AD<double> v_ref =  30;
 
-const int weight_cte =         1000; // cross-track error weight
-const int weight_epsi =        1000; // orientation error weight
-const int weight_delta =       1; // steering actuator action weight
-const int weight_a =           1; // acceleration actuator action weight
-const int weight_vel_diff =    1; // v - v_ref weight
-const int weight_delta_diff =  10; // change in steering actuator action weight
-const int weight_a_diff =      10; // change in acceleration actuator action weight
-
-
-// This value assumes the model presented in the classroom is used.
-//
-// It was obtained by measuring the radius formed by running the vehicle in the
-// simulator around in a circle with a constant steering angle and velocity on a
-// flat terrain.
-//
-// Lf was tuned until the the radius formed by the simulating the model
-// presented in the classroom matched the previous radius.
-//
-// This is the length from front to CoG that has a similar radius.
-const double Lf = 2.67;
+const int w_cte =         1000; // cross-track error weight
+const int w_epsi =        1000; // orientation error weight
+const int w_delta =       1; // steering actuator action weight
+const int w_a =           1; // acceleration actuator action weight
+const int w_vel_diff =    1; // v - v_ref weight
+const int w_delta_diff =  10; // change in steering actuator action weight
+const int w_a_diff =      10; // change in acceleration actuator action weight
+//const int w_epsi_diff = 100;
 
 class FG_eval {
  public:
@@ -68,19 +68,37 @@ class FG_eval {
      */
     fg[0] = 0.0;
     for (size_t i=0; i < N; ++i) {
-      fg[0] += weight_cte * CppAD::pow(vars[cte_start + i], 2);  // minimise cross-track error
-      fg[0] += weight_epsi * CppAD::pow(vars[epsi_start + i], 2); // minimise orientation error
-      fg[0] += weight_vel_diff * CppAD::pow(vars[v_start + i] - v_ref, 2);
+      fg[0] += w_cte * CppAD::pow(vars[cte_start + i], 2);  // minimise cross-track error
+      fg[0] += w_epsi * CppAD::pow(vars[epsi_start + i], 2); // minimise orientation error
+      fg[0] += w_vel_diff * CppAD::pow(vars[v_start + i] - v_ref, 2);
     }
     for (size_t i=0; i < N-1; ++i) {
-      fg[0] += weight_delta * CppAD::pow(vars[delta_start + i], 2);  // minimise steering actuator action
-      fg[0] += weight_a * CppAD::pow(vars[a_start + i], 2); // minimise throttle/brake action
-      //fg[0] += weight_epsi_diff * CppAD::pow(vars[epsi_start + i + 1] - vars[epsi_start + i], 2);
+      fg[0] += w_delta * CppAD::pow(vars[delta_start + i], 2);  // minimise steering actuator action
+      fg[0] += w_a * CppAD::pow(vars[a_start + i], 2); // minimise throttle/brake action
+      //fg[0] += w_epsi_diff * CppAD::pow(vars[epsi_start + i + 1] - vars[epsi_start + i], 2);
     }
     for (size_t t=0; t < N-2; ++t) {
-      fg[0] += weight_delta_diff * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);  // smooth steering angle action
-      fg[0] += weight_a_diff * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2); // smooth throttle/brake action
+      fg[0] += w_delta_diff * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);  // smooth steering angle action
+      fg[0] += w_a_diff * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2); // smooth throttle/brake action
     }
+
+    /*
+     * Construct the rest of fg.
+     */
+    /*
+    double delay = 0.5;
+    AD<double> v0_ = vars[v_start];
+    AD<double> psi0_ = vars[psi_start];
+    AD<double> delta0_ = vars[delta_start];
+    AD<double> a0_ = vars[a_start];
+
+    fg[x_start + 1] = vars[x_start] + v0_ * CppAD::cos(psi0_) * delay;
+    fg[y_start + 1] = vars[y_start] + v0_ * CppAD::sin(psi0_) * delay;;
+    fg[psi_start + 1] = vars[psi_start] - v0_/Lf * delta0_ * delay;;
+    fg[v_start + 1] = vars[v_start] + a0_ * delay ;
+    fg[cte_start + 1] = vars[cte_start];
+    fg[epsi_start + 1] = vars[epsi_start];
+    */
 
     fg[x_start + 1] = vars[x_start];
     fg[y_start + 1] = vars[y_start];
@@ -121,17 +139,16 @@ class FG_eval {
   }
 };
 
-
 //
 // MPC class definition implementation.
 //
 MPC::MPC() {}
 MPC::~MPC() {}
 
-vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
+vector<vector<double>> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   bool ok = true;
-  size_t i;
   typedef CPPAD_TESTVECTOR(double) Dvector;
+
   double x0 = state[0];
   double y0 = state[1];
   double psi0 = state[2];
@@ -139,23 +156,19 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   double cte0 = state[4];
   double epsi0 = state[5];
 
-  // TODO: Set the number of model variables (includes both states and inputs).
-
-  // For example: If the state is a 4 element vector, the actuators is a 2
-  // element vector and there are 10 timesteps. The number of variables is:
-  //
-  // 4 * 10 + 2 * 9
+  // TODO: done
+  // Set the number of model variables (includes both states and inputs)
   size_t n_vars = N * state_dim + (N-1) * act_dim;
-  // TODO: Set the number of constraints
-    size_t n_constraints = N * state_dim;
+  // TODO: done
+  // Set the number of constraints
+  size_t n_constraints = N * state_dim;
 
   // Initial value of the independent variables.
   // SHOULD BE 0 besides initial state.
   Dvector vars(n_vars);
-  for (int i = 0; i < n_vars; i++) {
-    vars[i] = 0;
+  for (size_t i = 0; i < n_vars; i++) {
+    vars[i] = 0.0;
   }
-
   vars[x_start] = x0;
   vars[y_start] = y0;
   vars[psi_start] = psi0;
@@ -163,9 +176,16 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   vars[cte_start] = cte0;
   vars[epsi_start] = epsi0;
 
+  /*
+  for (int i=0; i< n_vars; i++) {
+    cout << "x_" << i << ": " << vars[i] << endl;
+  }
+  */
+
   Dvector vars_lowerbound(n_vars);
   Dvector vars_upperbound(n_vars);
-  // TODO: Set lower and upper limits for variables.
+  // TODO: done
+  // Set lower and upper limits for variables.
   for (size_t i = 0; i < delta_start; i++) {
     vars_lowerbound[i] = -1.0e19;
     vars_upperbound[i] = 1.0e19;
@@ -179,15 +199,26 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
     vars_upperbound[i] = 1.0;
   }
 
-
   // Lower and upper limits for the constraints
   // Should be 0 besides initial state.
   Dvector constraints_lowerbound(n_constraints);
   Dvector constraints_upperbound(n_constraints);
-  for (int i = 0; i < n_constraints; i++) {
-    constraints_lowerbound[i] = 0;
-    constraints_upperbound[i] = 0;
+  for (size_t i = 0; i < n_constraints; i++) {
+    constraints_lowerbound[i] = 0.0;
+    constraints_upperbound[i] = 0.0;
   }
+  constraints_lowerbound[x_start] = x0;
+  constraints_upperbound[x_start] = x0;
+  constraints_lowerbound[y_start] = y0;
+  constraints_upperbound[y_start] = y0;
+  constraints_lowerbound[psi_start] = psi0;
+  constraints_upperbound[psi_start] = psi0;
+  constraints_lowerbound[v_start] = v0;
+  constraints_upperbound[v_start] = v0;
+  constraints_lowerbound[cte_start] = cte0;
+  constraints_upperbound[cte_start] = cte0;
+  constraints_lowerbound[epsi_start] = epsi0;
+  constraints_upperbound[epsi_start] = epsi0;
 
   // object that computes objective and constraints
   FG_eval fg_eval(coeffs);
@@ -199,20 +230,20 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   std::string options;
   // Uncomment this if you'd like more print information
   options += "Integer print_level  0\n";
-
-  // NOTE: Setting sparse to true allows the solver to take advantage
-  // of sparse routines, this makes the computation MUCH FASTER. If you
-  // can uncomment 1 of these and see if it makes a difference or not but
-  // if you uncomment both the computation time should go up in orders of
-  // magnitude.
   options += "Sparse  true        forward\n";
   options += "Sparse  true        reverse\n";
-  // NOTE: Currently the solver has a maximum time limit of 0.5 seconds.
-  // Change this as you see fit.
   options += "Numeric max_cpu_time          100\n";
 
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;
+
+  // solve the problem
+  CppAD::ipopt::solve<Dvector, FG_eval>(
+      options, vars, vars_lowerbound, vars_upperbound, constraints_lowerbound,
+      constraints_upperbound, fg_eval, solution);
+
+  // Check some of the solution values
+  ok &= solution.status == CppAD::ipopt::solve_result<Dvector>::success;
 
   if (!ok) {
     cout << "Couldn't solve... :(" << endl;
