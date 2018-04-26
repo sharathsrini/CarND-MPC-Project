@@ -92,7 +92,3 @@ py = py + v*sin(psi)*latency;
 psi = psi + v * delta * latency/ Lf;
 v = v + a * latency;
 state << x, y, psi_local, v, cte, epsi;
-
-// ...
-// conversion to a local reference frame
-```
