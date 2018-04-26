@@ -643,7 +643,7 @@ namespace matplotlibcpp {
 				using std::begin;
 				using std::end;
 
-				auto xs = static_cast<unsigned int>(distance(begin(x), end(x)));
+				auto xs = distance(begin(x), end(x));
 				auto ys = distance(begin(y), end(y));
 				assert(xs == ys && "x and y data must have the same number of elements!");
 
