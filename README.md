@@ -1,6 +1,10 @@
 
 
 # Model Predictive Control
+
+In this project I have implemented Model Predictive Control algorithm that drives the car around the track in Udacity car simulator. There is an additional challenge: a 100 millisecond latency between actuations commands on top of the connection latency that I had to deal with.
+
+
 # Reflection
 #### Comparison of PID , Fuzzy and MPC Controller.
 PID is very simple, (at least as far as control theory can be simple) and has the nice features of 1. being easy to empircally tune by hand and 2. not needing much processing power. It's also one of the best studied and most common.
