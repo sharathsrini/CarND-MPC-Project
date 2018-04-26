@@ -75,7 +75,7 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
 int main() {
   uWS::Hub h;
 
-  MPC mpc;
+
 
   std::vector<double> steering_data;
   std::vector<double> acceleration_data;
