@@ -119,14 +119,14 @@ int main() {
           // making  them static for state updates because of the  delay in the controller
           static double steer_value = 0.0;
           static double throttle_value = 0.0;
-          
 
-          // Construct state in local reference frame
+
+          // State in the Local frame.
           Eigen::VectorXd state(6);
           double x = 0.0;
           double y = 0.0;
           double psi_local = 0.0;
-          // Convert ptsx and ptsy to local reference frame
+          // Convert the x and y points to local reference frame
           vector<double> x_refs = {};
           vector<double> y_refs = {};
           double cos_psi = std::cos(psi);
@@ -136,18 +136,19 @@ int main() {
             double y_local = cos_psi*(ptsy[i] - py) - sin_psi*(ptsx[i] - px);
             x_refs.push_back(x_local);
             y_refs.push_back(y_local);
-          } 
-          // fit polynomial to updated reference trajectory coordinates
+          }
+          // Lets fit the polynomial to update the  reference trajectory coordinates
           Eigen::VectorXd xpoints = Eigen::Map<Eigen::VectorXd>(x_refs.data(), x_refs.size());
           Eigen::VectorXd ypoints = Eigen::Map<Eigen::VectorXd>(y_refs.data(), y_refs.size());
           Eigen::VectorXd coeffs = polyfit(xpoints, ypoints, 2);
-          double cte = -coeffs[0]; // since y = 0 in local coordinate frame            
-          double epsi = -std::atan(coeffs[1]); // since psi = 0 in local coordinate frame  
-
+          double cte = -coeffs[0]; // since y = 0 in local coordinate frame
+          double epsi = -std::atan(coeffs[1]); // since psi = 0 in local coordinate frame
+          // On real time a delay may occur which could be because out of
+          // the actuator, or the sensor latency in measuring the real world.
           // Because of delay we propagate state in time so that MPC initial condition is not the current one,
           // but the one after 100 milliseconds
-          const int delay = 100; 
-          const double Lf = 2.67; 
+          const int delay = 100;
+          const double Lf = 2.67;
           const double dt = ((delay) ? delay/1000.0 : 0.0);
           double dx = v * std::cos(psi) * dt;
           double dy = v * std::sin(psi) * dt;
@@ -155,7 +156,7 @@ int main() {
           if (delay) {
               px += dx;
               py += dy;
-              psi -= v/Lf * steer_value * deg2rad(25.0) * dt;    
+              psi -= v/Lf * steer_value * deg2rad(25.0) * dt;
           }
           cos_psi = std::cos(psi);
           sin_psi = std::sin(psi);
@@ -166,11 +167,12 @@ int main() {
             double y_local = cos_psi*(ptsy[i] - py) - sin_psi*(ptsx[i] - px);
             x_refs.push_back(x_local);
             y_refs.push_back(y_local);
-          } 
+          }
           // fit polynomial to updated reference trajectory coordinates
           xpoints = Eigen::Map<Eigen::VectorXd>(x_refs.data(), x_refs.size());
           ypoints = Eigen::Map<Eigen::VectorXd>(y_refs.data(), y_refs.size());
           coeffs = polyfit(xpoints, ypoints, 2);
+          //if delay is true, then we would have to update the states.
           if (delay) {
             x += v * std::cos(psi_local) * dt;
             y += v * std::sin(psi_local) * dt;
@@ -184,10 +186,20 @@ int main() {
           state << x, y, psi_local, v, cte, epsi;
 
           // std::cout << "State: " << std::endl <<  state << std::endl;
-          
+
           std::vector<std::vector<double>> result = mpc.Solve(state, coeffs);
           steer_value = result[2][0]/deg2rad(25.0);
           throttle_value = result[2][1];
+
+          // Lets Store the value to visualize the signals provided by the MPC
+          steering_data.push_back(steer_value);
+          acceleration_data.push_back(throttle_value);
+          cte_data.push_back(cte);
+          epsi_data.push_back(epsi);
+          data_position[0].push_back(ptsx[0]);
+          data_position[1].push_back(ptsy[1]);
+          data_position[2].push_back(px);
+          data_position[3].push_back(py);
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
@@ -195,7 +207,7 @@ int main() {
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
-          //Display the MPC predicted trajectory 
+          //Display the MPC predicted trajectory
           vector<double> mpc_x_vals;
           vector<double> mpc_y_vals;
 
@@ -227,7 +239,7 @@ int main() {
           //
           // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
           // SUBMITTING.
-          this_thread::sleep_for(chrono::milliseconds(100));
+          this_thread::sleep_for(chrono::milliseconds(delay));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
         }
       } else {
