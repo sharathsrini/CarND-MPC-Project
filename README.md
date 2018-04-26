@@ -1,108 +1,98 @@
-# CarND-Controls-MPC
-Self-Driving Car Engineer Nanodegree Program
-
----
-
-## Dependencies
-
-* cmake >= 3.5
- * All OSes: [click here for installation instructions](https://cmake.org/install/)
-* make >= 4.1(mac, linux), 3.81(Windows)
-  * Linux: make is installed by default on most Linux distros
-  * Mac: [install Xcode command line tools to get make](https://developer.apple.com/xcode/features/)
-  * Windows: [Click here for installation instructions](http://gnuwin32.sourceforge.net/packages/make.htm)
-* gcc/g++ >= 5.4
-  * Linux: gcc / g++ is installed by default on most Linux distros
-  * Mac: same deal as make - [install Xcode command line tools]((https://developer.apple.com/xcode/features/)
-  * Windows: recommend using [MinGW](http://www.mingw.org/)
-* [uWebSockets](https://github.com/uWebSockets/uWebSockets)
-  * Run either `install-mac.sh` or `install-ubuntu.sh`.
-  * If you install from source, checkout to commit `e94b6e1`, i.e.
-    ```
-    git clone https://github.com/uWebSockets/uWebSockets
-    cd uWebSockets
-    git checkout e94b6e1
-    ```
-    Some function signatures have changed in v0.14.x. See [this PR](https://github.com/udacity/CarND-MPC-Project/pull/3) for more details.
-
-* **Ipopt and CppAD:** Please refer to [this document](https://github.com/udacity/CarND-MPC-Project/blob/master/install_Ipopt_CppAD.md) for installation instructions.
-* [Eigen](http://eigen.tuxfamily.org/index.php?title=Main_Page). This is already part of the repo so you shouldn't have to worry about it.
-* Simulator. You can download these from the [releases tab](https://github.com/udacity/self-driving-car-sim/releases).
-* Not a dependency but read the [DATA.md](./DATA.md) for a description of the data sent back from the simulator.
 
 
-## Basic Build Instructions
+# Model Predictive Control
+# Reflection
+#### Comparison of PID , Fuzzy and MPC Controller.
+PID is very simple, (at least as far as control theory can be simple) and has the nice features of 1. being easy to empircally tune by hand and 2. not needing much processing power. It's also one of the best studied and most common.
 
-1. Clone this repo.
-2. Make a build directory: `mkdir build && cd build`
-3. Compile: `cmake .. && make`
-4. Run it: `./mpc`.
+With PID you have three terms: the P control, which applies a force or whatever... proportionally.
 
-## Tips
+Let's say you are trying to park a car.
 
-1. It's recommended to test the MPC on basic examples to see if your implementation behaves as desired. One possible example
-is the vehicle starting offset of a straight line (reference). If the MPC implementation is correct, after some number of timesteps
-(not too many) it should find and track the reference line.
-2. The `lake_track_waypoints.csv` file has the waypoints of the lake track. You could use this to fit polynomials and points and see of how well your model tracks curve. NOTE: This file might be not completely in sync with the simulator so your solution should NOT depend on it.
-3. For visualization this C++ [matplotlib wrapper](https://github.com/lava/matplotlib-cpp) could be helpful.)
-4.  Tips for setting up your environment are available [here](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/0949fca6-b379-42af-a919-ee50aa304e6a/lessons/f758c44c-5e40-4e01-93b5-1a82aa4e044f/concepts/23d376c7-0195-4276-bdf0-e02f1f3c665d)
-5. **VM Latency:** Some students have reported differences in behavior using VM's ostensibly a result of latency.  Please let us know if issues arise as a result of a VM environment.
+The P term means you give more gas based on how far the car is from the parking space
 
-## Editor Settings
+The I term means you give more gas if you haven't been moving toward the parking space for a while (it's proportional to the integral of the error value.)
 
-We've purposefully kept editor configuration files out of this repo in order to
-keep it as simple and environment agnostic as possible. However, we recommend
-using the following settings:
+The D term is a sort of damping / transient response enhancer, and would represent slowing down if you were quickly approaching the parking space.
 
-* indent using spaces
-* set tab width to 2 spaces (keeps the matrices in source code aligned)
+In general P is by far the most important, while I is of intermediate importance (it lets you reach zero error over time) and D is least important, frequently set to zero in practice.
 
-## Code Style
+Fuzzy logic is popular in Japan. I don't know much about it. Basically, it uses less math and more manually written rules such as splitting a variable into "close to parking space" "far from parking space" "past the parking space", etc, and then defining what to do with each set of states, with a sort of smooth mixing algorithm between states. It can also be used to deal with edge cases of PID or other systems.
 
-Please (do your best to) stick to [Google's C++ style guide](https://google.github.io/styleguide/cppguide.html).
+Model predictive control... well, it's time for the Laplace Transform party. Lots of math, and if you have no background in controls at all it will be confusing with lots of "divide by s" equals integration. Basically, you make a linear model of the process being controlled, and then solve some Lagrangey, Eulery stuff that optimizes a cost function you write, and you get control parameters.
 
-## Project Instructions and Rubric
+PID is by far the simplest, and has probably been implemented for you. MPC lets you specify things like "try to save power" or the like in the cost function. (so does the LQR method, which is superficially similar in that it involves optimizing a cost function.)
 
-Note: regardless of the changes you make, your project must be buildable using
-cmake and make!
 
-More information is only accessible by people who are already enrolled in Term 2
-of CarND. If you are enrolled, see [the project page](https://classroom.udacity.com/nanodegrees/nd013/parts/40f38239-66b6-46ec-ae68-03afd8a601c8/modules/f1820894-8322-4bb3-81aa-b26b3c6dcbaf/lessons/b1ff3be0-c904-438e-aad3-2b5379f0e0c3/concepts/1a2255a0-e23c-44cf-8d41-39b8a3c8264a)
-for instructions and the project rubric.
+In this project I have implemented Model Predictive Control algorithm that drives the car around the track in Udacity [car simulator](https://github.com/udacity/self-driving-car-sim/releases). There is an additional challenge: a 100 millisecond latency between actuations commands on top of the connection latency that I had to deal with.
 
-## Hints!
+### Compilation and building instructions
 
-* You don't have to follow this directory structure, but if you do, your work
-  will span all of the .cpp files here. Keep an eye out for TODOs.
+* Clone this repository
+* Make a build directory: `mkdir build && cd build`
+* Compile the project with `cmake .. && make`
+* Run it: `./mpc`
 
-## Call for IDE Profiles Pull Requests
+### The model
 
-Help your fellow students!
+#### Update equations:
 
-We decided to create Makefiles with cmake to keep this project as platform
-agnostic as possible. Similarly, we omitted IDE profiles in order to we ensure
-that students don't feel pressured to use one IDE or another.
+1) kinematic update equations:
 
-However! I'd love to help people get up and running with their IDEs of choice.
-If you've created a profile for an IDE that you think other students would
-appreciate, we'd love to have you add the requisite profile files and
-instructions to ide_profiles/. For example if you wanted to add a VS Code
-profile, you'd add:
+![equation](http://latex.codecogs.com/gif.latex?%5C%5C%20x_%7Bt&plus;1%7D%20%3D%20x_t%20&plus;%20v_t%20%5Ccdot%20%5Ccos%7B%5Cpsi_t%7D%20%5Ccdot%20dt%20%5C%5C%20y_%7Bt&plus;1%7D%20%3D%20y_t%20&plus;%20v_t%20%5Ccdot%20%5Csin%7B%5Cpsi_t%7D%20%5Ccdot%20dt%20%5C%5C%20%5Cpsi_%7Bt&plus;1%7D%20%3D%20%5Cpsi_t%20-%20%5Cfrac%7Bv_t%7D%7BL_f%7D%20%5Ccdot%20%5Cdelta_t%20%5Ccdot%20dt%20%5C%5C%20v_%7Bt&plus;1%7D%20%3D%20v_t%20&plus;%20a_t%20%5Ccdot%20dt)
 
-* /ide_profiles/vscode/.vscode
-* /ide_profiles/vscode/README.md
+2) cross track error update equation:
 
-The README should explain what the profile does, how to take advantage of it,
-and how to install it.
+![equation](http://latex.codecogs.com/gif.latex?cte_%7Bt&plus;1%7D%20%3D%20cte_t%20&plus;%20v_t%20%5Ccdot%20%5Csin%7Be%5Cpsi_t%7D%20%5Ccdot%20dt%20%5C%5C),
 
-Frankly, I've never been involved in a project with multiple IDE profiles
-before. I believe the best way to handle this would be to keep them out of the
-repo root to avoid clutter. My expectation is that most profiles will include
-instructions to copy files to a new location to get picked up by the IDE, but
-that's just a guess.
+![equation](http://latex.codecogs.com/gif.latex?cte_t%20%3D%20y_t%20-%20f%28x_t%29)
 
-One last note here: regardless of the IDE used, every submitted project must
-still be compilable with cmake and make./
+3) orientation error update equation:
 
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
+![equation](http://latex.codecogs.com/gif.latex?e%5Cpsi_%7Bt&plus;1%7D%20%3D%20e%5Cpsi_t%20-%20%5Cfrac%7Bv_t%7D%7BL_f%7D%20%5Ccdot%20%5Cdelta_t%20%5Ccdot%20dt%20%5C%5C)
+
+![equation](http://latex.codecogs.com/gif.latex?e%5Cpsi_t%20%3D%20%5Cpsi_t%20-%20%5Carctan%20f%27%28x_t%29)
+
+#### State variables vector:
+
+![equation](http://latex.codecogs.com/gif.latex?%5Cmathbf%7Bx%7D_t%20%3D%20%5Bx_t%2C%20%7Ey_t%2C%20%7Epsi_t%2C%20%7Ev_t%2C%20%7Ecte_t%2C%20%7Ee%5Cpsi_t%5D%5ET)
+
+#### Actuators vector:
+
+![equations](http://latex.codecogs.com/gif.latex?%5Cmathbf%7Bu%7D_t%20%3D%20%5B%5Cdelta_t%2C%20%7Ea_t%5D%5ET)
+
+### MPC tuning
+
+`N` - finite horizon size (number of predicted timesteps). This parameter heavily depends on computational capabilities, and in my case, I limited myself with `N = 10`. Higher `N`  leads to quite interesting effects on the turns: vehicle slightly overshoots but makes the turn without reducing the speed, whereas in case of small `N` it has to push the brake since it was not expecting the turn.
+
+`dt` - time step. Again, this parameter depends on computer hardware. In case `dt` is small the controller calculates "very detailed" trajectory consisting of `N` pieces. The price for it is the need for fast computations between consecutive trajectory points. In my case, I observed increasing vehicle wiggling when `dt` is comparably small to the MPC algorithm execution time. So I set it to `dt = 0.1`.
+
+
+Number one preferences are cross-track error and orientation error, then derivatives of actuator actions so that the trajectory of car movement stayed smooth enough. Finally, following velocity reference and reducing the amount of actuators power are the least prefferable goals of the controller.
+
+### MPC preprocessing. Latency
+#### Latency. Initial state prediction
+
+There is an additional challenge in the system - 100 ms latency that is modelled by the following command: `this_thread::sleep_for(chrono::milliseconds(100));`. The problem is that MPC controller sees the system 100 ms before actuators are actually applied. The solution is to predict the system state for 100ms in future and use it as an initial condition for MPC controller:
+
+```cpp
+
+double latency = 0.1;
+```
+
+#### Latency. Prediciton of reference points
+
+Additionally, when the local reference coordinates are calculated for the car, we need to predict car's position after 100 ms as well and then convert them to a local coordinate frame:
+
+```cpp
+v = v * 0.44704;
+delta = delta * -1;
+px = px + v*cos(psi)*latency;
+py = py + v*sin(psi)*latency;
+psi = psi + v * delta * latency/ Lf;
+v = v + a * latency;
+state << x, y, psi_local, v, cte, epsi;
+
+// ...
+// conversion to a local reference frame
+```
