@@ -68,18 +68,18 @@ class FG_eval {
      */
     fg[0] = 0.0;
     for (size_t i=0; i < N; ++i) {
-      fg[0] += w_cte * CppAD::pow(vars[cte_start + i], 2);  // minimise cross-track error
-      fg[0] += w_epsi * CppAD::pow(vars[epsi_start + i], 2); // minimise orientation error
-      fg[0] += w_vel_diff * CppAD::pow(vars[v_start + i] - v_ref, 2);
+      fg[0] += weight_cte * CppAD::pow(vars[cte_start + i], 2);  // minimise cross-track error
+      fg[0] += weight_epsi * CppAD::pow(vars[epsi_start + i], 2); // minimise orientation error
+      fg[0] += weight_vel_diff * CppAD::pow(vars[v_start + i] - v_ref, 2);
     }
     for (size_t i=0; i < N-1; ++i) {
-      fg[0] += w_delta * CppAD::pow(vars[delta_start + i], 2);  // minimise steering actuator action
-      fg[0] += w_a * CppAD::pow(vars[a_start + i], 2); // minimise throttle/brake action
-      //fg[0] += w_epsi_diff * CppAD::pow(vars[epsi_start + i + 1] - vars[epsi_start + i], 2);
+      fg[0] += weight_delta * CppAD::pow(vars[delta_start + i], 2);  // minimise steering actuator action
+      fg[0] += weight_a * CppAD::pow(vars[a_start + i], 2); // minimise throttle/brake action
+      //fg[0] += weight_epsi_diff * CppAD::pow(vars[epsi_start + i + 1] - vars[epsi_start + i], 2);
     }
     for (size_t t=0; t < N-2; ++t) {
-      fg[0] += w_delta_diff * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);  // smooth steering angle action
-      fg[0] += w_a_diff * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2); // smooth throttle/brake action
+      fg[0] += weight_delta_diff * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);  // smooth steering angle action
+      fg[0] += weight_a_diff * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2); // smooth throttle/brake action
     }
 
     fg[x_start + 1] = vars[x_start];
