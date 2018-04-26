@@ -8,9 +8,12 @@
 #include "Eigen-3.3/Eigen/QR"
 #include "MPC.h"
 #include "json.hpp"
+#include "matplotlibcpp.h"
+
 
 // for convenience
 using json = nlohmann::json;
+namespace plt = matplotlibcpp;
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -33,12 +36,16 @@ string hasData(string s) {
 }
 
 // Evaluate a polynomial.
-double polyeval(Eigen::VectorXd coeffs, double x) {
+std::vector<double> polyeval(Eigen::VectorXd coeffs, double x) {
   double result = 0.0;
   for (int i = 0; i < coeffs.size(); i++) {
     result += coeffs[i] * pow(x, i);
   }
-  return result;
+  double d_result = 0.0;
+  for (int i = 1; i < coeffs.size(); i++) {
+    d_result += i * coeffs[i] * pow(x, i-1);
+  }
+  return {result, d_result};
 }
 
 // Fit a polynomial.
@@ -68,11 +75,20 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
 int main() {
   uWS::Hub h;
 
+  MPC mpc;
+
+  std::vector<double> steering_data;
+  std::vector<double> acceleration_data;
+  std::vector<double> cte_data;
+  std::vector<double> epsi_data;
+  std::vector<std::vector<double>> data_position(4);
+  bool stop_flag = false;
+
   // MPC is initialized here!
   MPC mpc;
 
-  h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
-                     uWS::OpCode opCode) {
+  h.onMessage([&mpc, &steer_data, &acceleration_data, &cte_data, &epsi_data, &data_position, &stop_flag](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
+                     uWS::OpCode opCode)  {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
@@ -98,8 +114,80 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
-          double steer_value;
-          double throttle_value;
+
+           v = v * 0.44704; // convert to ms
+          // making  them static for state updates because of the  delay in the controller
+          static double steer_value = 0.0;
+          static double throttle_value = 0.0;
+          
+
+          // Construct state in local reference frame
+          Eigen::VectorXd state(6);
+          double x = 0.0;
+          double y = 0.0;
+          double psi_local = 0.0;
+          // Convert ptsx and ptsy to local reference frame
+          vector<double> x_refs = {};
+          vector<double> y_refs = {};
+          double cos_psi = std::cos(psi);
+          double sin_psi = std::sin(psi);
+          for (size_t i=0; i < ptsx.size(); ++i) {
+            double x_local = cos_psi*(ptsx[i] - px) + sin_psi*(ptsy[i] - py);
+            double y_local = cos_psi*(ptsy[i] - py) - sin_psi*(ptsx[i] - px);
+            x_refs.push_back(x_local);
+            y_refs.push_back(y_local);
+          } 
+          // fit polynomial to updated reference trajectory coordinates
+          Eigen::VectorXd xpoints = Eigen::Map<Eigen::VectorXd>(x_refs.data(), x_refs.size());
+          Eigen::VectorXd ypoints = Eigen::Map<Eigen::VectorXd>(y_refs.data(), y_refs.size());
+          Eigen::VectorXd coeffs = polyfit(xpoints, ypoints, 2);
+          double cte = -coeffs[0]; // since y = 0 in local coordinate frame            
+          double epsi = -std::atan(coeffs[1]); // since psi = 0 in local coordinate frame  
+
+          // Because of delay we propagate state in time so that MPC initial condition is not the current one,
+          // but the one after 100 milliseconds
+          const int delay = 100; 
+          const double Lf = 2.67; 
+          const double dt = ((delay) ? delay/1000.0 : 0.0);
+          double dx = v * std::cos(psi) * dt;
+          double dy = v * std::sin(psi) * dt;
+          // predict coordinates for the reference trajectory
+          if (delay) {
+              px += dx;
+              py += dy;
+              psi -= v/Lf * steer_value * deg2rad(25.0) * dt;    
+          }
+          cos_psi = std::cos(psi);
+          sin_psi = std::sin(psi);
+          x_refs = {};
+          y_refs = {};
+          for (size_t i=0; i < ptsx.size(); ++i) {
+            double x_local = cos_psi*(ptsx[i] - px) + sin_psi*(ptsy[i] - py);
+            double y_local = cos_psi*(ptsy[i] - py) - sin_psi*(ptsx[i] - px);
+            x_refs.push_back(x_local);
+            y_refs.push_back(y_local);
+          } 
+          // fit polynomial to updated reference trajectory coordinates
+          xpoints = Eigen::Map<Eigen::VectorXd>(x_refs.data(), x_refs.size());
+          ypoints = Eigen::Map<Eigen::VectorXd>(y_refs.data(), y_refs.size());
+          coeffs = polyfit(xpoints, ypoints, 2);
+          if (delay) {
+            x += v * std::cos(psi_local) * dt;
+            y += v * std::sin(psi_local) * dt;
+            std::vector<double> f_df = polyeval(coeffs, x);
+            psi_local -= v/Lf * steer_value * deg2rad(25.0) * dt;
+            v += throttle_value * dt;
+            cte += v * std::sin(epsi) * dt;
+            epsi -= v/Lf * steer_value * deg2rad(25.0) * dt;
+          }
+
+          state << x, y, psi_local, v, cte, epsi;
+
+          // std::cout << "State: " << std::endl <<  state << std::endl;
+          
+          std::vector<std::vector<double>> result = mpc.Solve(state, coeffs);
+          steer_value = result[2][0]/deg2rad(25.0);
+          throttle_value = result[2][1];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
